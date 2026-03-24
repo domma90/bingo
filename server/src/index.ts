@@ -6,20 +6,24 @@ import path from 'path';
 import { registerHandlers } from './socketHandlers';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
-const CLIENT_URL = process.env.CLIENT_URL ?? 'http://localhost:5173';
 const SERVER_URL = process.env.SERVER_URL ?? `http://localhost:${PORT}`;
+
+// In production client and server share the same origin, so allow all same-origin + dev client
+const allowedOrigins = process.env.NODE_ENV === 'production'
+  ? [SERVER_URL]
+  : [SERVER_URL, 'http://localhost:5173'];
 
 const app = express();
 const httpServer = createServer(app);
 
 const io = new Server(httpServer, {
   cors: {
-    origin: [CLIENT_URL, SERVER_URL],
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
   },
 });
 
-app.use(cors({ origin: [CLIENT_URL, SERVER_URL] }));
+app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
 // Serve built client in production
@@ -42,5 +46,4 @@ io.on('connection', (socket) => {
 httpServer.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Server URL: ${SERVER_URL}`);
-  console.log(`Expecting client at: ${CLIENT_URL}`);
 });
