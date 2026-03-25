@@ -15,7 +15,7 @@ import {
   ResetGamePayload,
 } from './types';
 
-const ADMIN_SECRET = process.env.ADMIN_SECRET ?? 'bingo-admin-2026';
+const ADMIN_SECRET = process.env.ADMIN_SECRET ?? 'admin';
 
 export function registerHandlers(io: Server, socket: Socket, serverUrl: string): void {
   // Player joins and receives their unique card

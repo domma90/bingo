@@ -4,9 +4,9 @@ import BingoWheel from '../components/BingoWheel';
 import QRDisplay from '../components/QRDisplay';
 import { BingoClaim, GameSnapshot } from '../types';
 
-const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET ?? 'bingo-admin-2026';
+const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET ?? 'admin';
 
-type Tab = 'wheel' | 'qr' | 'claims';
+type Panel = 'called' | 'qr' | 'claims';
 
 export default function AdminView() {
   const [authenticated, setAuthenticated] = useState(false);
@@ -17,12 +17,17 @@ export default function AdminView() {
   const [qrData, setQrData] = useState<{ dataUrl: string; url: string } | null>(null);
   const [claims, setClaims] = useState<BingoClaim[]>([]);
   const [currentWord, setCurrentWord] = useState<string | null>(null);
+  const [displayWord, setDisplayWord] = useState<string | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [tab, setTab] = useState<Tab>('wheel');
+  const [panel, setPanel] = useState<Panel>('called');
   const [eventSlugInput, setEventSlugInput] = useState('hari-raya');
   const [eventNameInput, setEventNameInput] = useState('');
+  const [showReset, setShowReset] = useState(false);
+  const [claimFlash, setClaimFlash] = useState(false);
 
-  const spinQueueRef = useRef<string | null>(null);
+  // Holds the updated calledWords from the server until the spin animation
+  // completes — this keeps currentWord visible on the wheel during the spin.
+  const pendingCalledWordsRef = useRef<string[] | null>(null);
 
   useEffect(() => {
     if (!authenticated) return;
@@ -40,21 +45,26 @@ export default function AdminView() {
     });
 
     socket.on('word-called', ({ word, calledWords }: { word: string; calledWords: string[] }) => {
-      spinQueueRef.current = word;
+      // Store calledWords but don't apply yet — the wheel needs currentWord
+      // to still be in the available pool so the animation lands correctly.
+      pendingCalledWordsRef.current = calledWords;
       setCurrentWord(word);
       setIsSpinning(true);
-      setGameState(prev => prev ? { ...prev, calledWords } : null);
     });
 
     socket.on('bingo-claimed', (claim: BingoClaim) => {
       setClaims(prev => [claim, ...prev]);
+      setClaimFlash(true);
+      setTimeout(() => setClaimFlash(false), 1500);
     });
 
     socket.on('game-reset', (data: GameSnapshot) => {
       setGameState(data);
       setClaims([]);
       setCurrentWord(null);
+      setDisplayWord(null);
       setIsSpinning(false);
+      pendingCalledWordsRef.current = null;
     });
 
     socket.on('error', ({ message }: { message: string }) => {
@@ -89,6 +99,13 @@ export default function AdminView() {
 
   const handleSpinComplete = () => {
     setIsSpinning(false);
+    setDisplayWord(currentWord);
+    // Now safe to apply the calledWords update
+    if (pendingCalledWordsRef.current !== null) {
+      const cw = pendingCalledWordsRef.current;
+      pendingCalledWordsRef.current = null;
+      setGameState(prev => prev ? { ...prev, calledWords: cw } : null);
+    }
   };
 
   const handleReset = () => {
@@ -98,13 +115,19 @@ export default function AdminView() {
       eventSlug: eventSlugInput || 'hari-raya',
       eventName: eventNameInput || undefined,
     });
+    setShowReset(false);
   };
 
+  // ── Login ──────────────────────────────────────────────────────────────────
   if (!authenticated) {
     return (
       <div className="min-h-dvh flex items-center justify-center bg-raya-green p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-sm">
-          <h1 className="text-2xl font-bold text-raya-green text-center mb-6">Admin Panel</h1>
+        <div className="bg-white rounded-2xl shadow-2xl p-8 w-full max-w-sm">
+          <div className="text-center mb-7">
+            <div className="text-5xl mb-3">🎯</div>
+            <h1 className="text-2xl font-black text-raya-green">Admin Panel</h1>
+            <p className="text-gray-400 text-sm mt-1">Bingo Game Controller</p>
+          </div>
           <form onSubmit={handleLogin} className="flex flex-col gap-3">
             <input
               type="password"
@@ -112,9 +135,9 @@ export default function AdminView() {
               onChange={e => setSecretInput(e.target.value)}
               placeholder="Admin password"
               autoFocus
-              className="px-4 py-3 rounded-xl border-2 border-raya-green/30 focus:border-raya-green outline-none"
+              className="px-4 py-3 rounded-xl border-2 border-raya-green/30 focus:border-raya-green outline-none text-center tracking-widest text-gray-800"
             />
-            {authError && <p className="text-red-500 text-sm">{authError}</p>}
+            {authError && <p className="text-red-500 text-sm text-center">{authError}</p>}
             <button
               type="submit"
               className="py-3 bg-raya-green text-white font-bold rounded-xl hover:bg-raya-dark transition-colors"
@@ -127,42 +150,89 @@ export default function AdminView() {
     );
   }
 
+  // ── Derived state ──────────────────────────────────────────────────────────
   const wordPool = gameState?.wordPool ?? [];
   const calledWords = gameState?.calledWords ?? [];
+  const allCalled = wordPool.length > 0 && wordPool.length === calledWords.length;
+  const spinDisabled = isSpinning || allCalled;
+  const progress = wordPool.length > 0 ? (calledWords.length / wordPool.length) * 100 : 0;
 
+  // ── Admin UI ───────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-dvh flex flex-col bg-raya-dark text-white">
-      {/* Header */}
-      <header className="bg-raya-green px-6 py-4 flex items-center justify-between shadow-lg">
-        <div>
-          <h1 className="text-2xl font-black tracking-wide">🎯 Bingo Admin</h1>
-          <p className="text-white/70 text-sm">{gameState?.eventName ?? 'Loading…'}</p>
+    <div className="h-dvh flex flex-col bg-[#0d1117] text-white overflow-hidden">
+
+      {/* ── Header ── */}
+      <header className="flex items-center justify-between px-5 py-3 bg-[#111827] border-b border-white/5 shadow-lg shrink-0">
+        <div className="min-w-0">
+          <h1 className="text-base font-black tracking-wide">🎯 Bingo Admin</h1>
+          <p className="text-white/40 text-xs truncate">{gameState?.eventName ?? 'Loading…'}</p>
         </div>
-        <div className="text-right">
-          <p className="text-3xl font-black">{gameState?.playerCount ?? 0}</p>
-          <p className="text-white/70 text-xs">Players</p>
+
+        <div className="flex items-center gap-4 shrink-0">
+          <div className="text-center">
+            <p className="text-2xl font-black text-raya-gold leading-none">{gameState?.playerCount ?? 0}</p>
+            <p className="text-white/40 text-[10px] uppercase tracking-wide">Players</p>
+          </div>
+
+          {claims.length > 0 && (
+            <div className={`text-center transition-transform duration-200 ${claimFlash ? 'scale-125' : 'scale-100'}`}>
+              <p className="text-2xl font-black text-orange-400 leading-none">{claims.length}</p>
+              <p className="text-white/40 text-[10px] uppercase tracking-wide">Bingos</p>
+            </div>
+          )}
+
+          <button
+            onClick={() => setShowReset(v => !v)}
+            title="Settings / Reset"
+            className={`p-2 rounded-lg transition-colors text-lg leading-none
+              ${showReset ? 'bg-white/20 text-white' : 'text-white/40 hover:text-white hover:bg-white/10'}`}
+          >
+            ⚙️
+          </button>
         </div>
       </header>
 
-      {/* Tabs */}
-      <nav className="flex bg-raya-dark border-b border-white/10">
-        {(['wheel', 'qr', 'claims'] as Tab[]).map(t => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            className={`flex-1 py-3 text-sm font-semibold uppercase tracking-wide transition-colors ${
-              tab === t ? 'text-raya-gold border-b-2 border-raya-gold' : 'text-white/50 hover:text-white'
-            }`}
-          >
-            {t === 'wheel' ? '🎡 Wheel' : t === 'qr' ? '📱 QR Code' : `🏆 Claims (${claims.length})`}
-          </button>
-        ))}
-      </nav>
+      {/* ── Reset drawer ── */}
+      {showReset && (
+        <div className="bg-[#1a1f2e] border-b border-white/10 px-5 py-4 flex flex-col gap-2 shrink-0">
+          <p className="text-white/50 text-xs uppercase tracking-widest font-semibold mb-1">Reset / Change Event</p>
+          <input
+            type="text"
+            value={eventSlugInput}
+            onChange={e => setEventSlugInput(e.target.value)}
+            placeholder="Event slug  (hari-raya, christmas, diwali, generic)"
+            className="px-3 py-2 rounded-lg bg-white/10 text-white placeholder-white/30 text-sm outline-none border border-white/20 focus:border-raya-gold transition-colors"
+          />
+          <input
+            type="text"
+            value={eventNameInput}
+            onChange={e => setEventNameInput(e.target.value)}
+            placeholder="Custom event name (optional)"
+            className="px-3 py-2 rounded-lg bg-white/10 text-white placeholder-white/30 text-sm outline-none border border-white/20 focus:border-raya-gold transition-colors"
+          />
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={handleReset}
+              className="flex-1 py-2 rounded-lg bg-red-600 hover:bg-red-500 text-white text-sm font-bold transition-colors"
+            >
+              Reset Game
+            </button>
+            <button
+              onClick={() => setShowReset(false)}
+              className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 text-sm transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
-      <main className="flex-1 p-4 overflow-y-auto">
-        {/* Wheel tab */}
-        {tab === 'wheel' && (
-          <div className="flex flex-col items-center gap-6 pt-2">
+      {/* ── Two-column body ── */}
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0">
+
+        {/* ── Left column: wheel ── */}
+        <div className="flex items-center justify-center p-6 lg:flex-1 border-b border-white/5 lg:border-b-0 lg:border-r lg:border-white/5">
+          <div className="w-full max-w-[520px]">
             <BingoWheel
               words={wordPool}
               calledWords={calledWords}
@@ -170,111 +240,154 @@ export default function AdminView() {
               isSpinning={isSpinning}
               onSpinComplete={handleSpinComplete}
             />
+          </div>
+        </div>
 
-            <button
-              onClick={handleSpin}
-              disabled={isSpinning || wordPool.length === calledWords.length}
-              className={`
-                w-full max-w-xs py-5 rounded-2xl text-2xl font-black shadow-xl transition-all
-                ${isSpinning || wordPool.length === calledWords.length
-                  ? 'bg-white/20 text-white/40 cursor-not-allowed'
-                  : 'bg-raya-gold text-raya-dark hover:scale-105 active:scale-95 animate-pulse-gold'
-                }
-              `}
-            >
-              {isSpinning ? 'Spinning…' : wordPool.length === calledWords.length ? 'All words called!' : '🎡 SPIN!'}
-            </button>
+        {/* ── Right column: controls ── */}
+        <div className="flex flex-col gap-4 p-5 lg:w-80 xl:w-96 overflow-y-auto shrink-0">
 
-            {/* Called words list */}
-            {calledWords.length > 0 && (
-              <div className="w-full max-w-xs">
-                <p className="text-white/60 text-xs uppercase tracking-wide mb-2">Called words ({calledWords.length})</p>
-                <div className="flex flex-wrap gap-2">
+          {/* Current word banner */}
+          <div className={`
+            rounded-2xl border-2 px-6 py-5 text-center transition-all duration-300 min-h-[90px] flex items-center justify-center
+            ${displayWord
+              ? 'bg-raya-green border-raya-gold shadow-[0_0_32px_rgba(201,150,12,0.25)]'
+              : 'bg-white/5 border-white/10'
+            }
+          `}>
+            {isSpinning ? (
+              <span className="text-white/40 text-lg animate-pulse">Spinning…</span>
+            ) : displayWord ? (
+              <span className="text-3xl font-black tracking-wide text-white">{displayWord}</span>
+            ) : (
+              <span className="text-white/30 text-lg">Spin the wheel!</span>
+            )}
+          </div>
+
+          {/* Spin button */}
+          <button
+            onClick={handleSpin}
+            disabled={spinDisabled}
+            className={`
+              w-full py-6 rounded-3xl text-3xl font-black tracking-wide shadow-2xl
+              transition-all duration-150 select-none
+              ${spinDisabled
+                ? 'bg-white/10 text-white/25 cursor-not-allowed'
+                : 'bg-raya-gold text-raya-dark hover:brightness-110 active:scale-95 active:brightness-90'
+              }
+            `}
+            style={!spinDisabled ? { boxShadow: '0 0 48px rgba(201,150,12,0.35)' } : undefined}
+          >
+            {isSpinning ? '⏳ Spinning…' : allCalled ? '✅ All Called!' : '🎡 SPIN!'}
+          </button>
+
+          {/* Progress bar */}
+          {wordPool.length > 0 && (
+            <div>
+              <div className="flex justify-between text-xs text-white/40 mb-1.5">
+                <span>{calledWords.length} called</span>
+                <span>{wordPool.length - calledWords.length} remaining</span>
+              </div>
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-raya-gold rounded-full transition-all duration-700"
+                  style={{ width: `${progress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Panel tabs */}
+          <div className="flex rounded-xl overflow-hidden border border-white/10 text-xs font-semibold uppercase tracking-wide shrink-0">
+            {(['called', 'qr', 'claims'] as Panel[]).map(p => (
+              <button
+                key={p}
+                onClick={() => setPanel(p)}
+                className={`flex-1 py-2.5 transition-colors
+                  ${panel === p
+                    ? 'bg-raya-gold text-raya-dark'
+                    : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white'
+                  }`}
+              >
+                {p === 'called'
+                  ? `Words (${calledWords.length})`
+                  : p === 'qr'
+                  ? '📱 QR'
+                  : `🏆 (${claims.length})`}
+              </button>
+            ))}
+          </div>
+
+          {/* Called words */}
+          {panel === 'called' && (
+            <div className="bg-[#111827] rounded-xl border border-white/10 p-3 flex-1 min-h-[120px]">
+              {calledWords.length === 0 ? (
+                <p className="text-white/30 text-sm text-center py-6">No words called yet</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
                   {[...calledWords].reverse().map((w, i) => (
                     <span
                       key={i}
-                      className={`px-2 py-1 rounded-lg text-xs font-semibold ${
-                        i === 0 ? 'bg-raya-gold text-raya-dark' : 'bg-white/10 text-white/80'
-                      }`}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold
+                        ${i === 0
+                          ? 'bg-raya-gold text-raya-dark shadow-md'
+                          : 'bg-white/10 text-white/70'
+                        }`}
                     >
                       {w}
                     </span>
                   ))}
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
 
-        {/* QR tab */}
-        {tab === 'qr' && (
-          <div className="flex flex-col items-center gap-6 pt-4">
-            {qrData ? (
-              <QRDisplay dataUrl={qrData.dataUrl} url={qrData.url} />
-            ) : (
-              <div className="text-white/50 text-center py-10">
-                <div className="text-4xl mb-2 animate-spin-slow">⏳</div>
-                <p>Generating QR code…</p>
-              </div>
-            )}
-            <p className="text-white/60 text-sm text-center max-w-xs">
-              Show this on the projector so players can scan and join
-            </p>
-          </div>
-        )}
-
-        {/* Claims tab */}
-        {tab === 'claims' && (
-          <div className="flex flex-col gap-3 pt-2">
-            {claims.length === 0 ? (
-              <p className="text-white/40 text-center py-10">No bingo claims yet</p>
-            ) : (
-              claims.map((c, i) => (
-                <div key={i} className="bg-raya-gold/20 border border-raya-gold rounded-xl px-4 py-3 flex items-center justify-between">
-                  <div>
-                    <p className="font-bold text-raya-gold text-lg">{c.playerName}</p>
-                    <p className="text-white/50 text-xs">
-                      {new Date(c.timestamp).toLocaleTimeString()}
-                    </p>
-                  </div>
-                  <span className="text-3xl">{i === 0 ? '🥇' : i === 1 ? '🥈' : '🥉'}</span>
+          {/* QR code */}
+          {panel === 'qr' && (
+            <div className="bg-[#111827] rounded-xl border border-white/10 p-4 flex flex-col items-center gap-3 min-h-[120px]">
+              {qrData ? (
+                <>
+                  <QRDisplay dataUrl={qrData.dataUrl} url={qrData.url} />
+                  <p className="text-white/40 text-xs text-center">
+                    Show this so players can scan and join
+                  </p>
+                </>
+              ) : (
+                <div className="text-white/40 text-center py-6">
+                  <div className="text-3xl mb-2 animate-spin-slow">⏳</div>
+                  <p className="text-sm">Generating QR code…</p>
                 </div>
-              ))
-            )}
-          </div>
-        )}
-      </main>
+              )}
+            </div>
+          )}
 
-      {/* Reset footer */}
-      <footer className="border-t border-white/10 p-4">
-        <details className="text-sm">
-          <summary className="text-white/40 cursor-pointer hover:text-white/60 select-none">
-            Reset / Change Event
-          </summary>
-          <div className="mt-3 flex flex-col gap-2">
-            <input
-              type="text"
-              value={eventSlugInput}
-              onChange={e => setEventSlugInput(e.target.value)}
-              placeholder="Event slug (e.g. hari-raya, christmas)"
-              className="px-3 py-2 rounded-lg bg-white/10 text-white placeholder-white/30 text-sm outline-none border border-white/20"
-            />
-            <input
-              type="text"
-              value={eventNameInput}
-              onChange={e => setEventNameInput(e.target.value)}
-              placeholder="Custom event name (optional)"
-              className="px-3 py-2 rounded-lg bg-white/10 text-white placeholder-white/30 text-sm outline-none border border-white/20"
-            />
-            <button
-              onClick={handleReset}
-              className="py-2 rounded-lg bg-red-600/80 hover:bg-red-600 text-white text-sm font-semibold transition-colors"
-            >
-              Reset Game
-            </button>
-          </div>
-        </details>
-      </footer>
+          {/* Bingo claims */}
+          {panel === 'claims' && (
+            <div className="bg-[#111827] rounded-xl border border-white/10 p-3 flex-1 min-h-[120px]">
+              {claims.length === 0 ? (
+                <p className="text-white/30 text-sm text-center py-6">No bingo claims yet</p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {claims.map((c, i) => (
+                    <div
+                      key={i}
+                      className="flex items-center gap-3 bg-raya-gold/10 border border-raya-gold/25 rounded-lg px-3 py-2.5"
+                    >
+                      <span className="text-xl leading-none">
+                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-raya-gold text-sm truncate">{c.playerName}</p>
+                        <p className="text-white/40 text-xs">{new Date(c.timestamp).toLocaleTimeString()}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+      </div>
     </div>
   );
 }

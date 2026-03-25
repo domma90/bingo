@@ -14,28 +14,49 @@ const COLORS = [
 ];
 
 export default function BingoWheel({ words, calledWords, currentWord, isSpinning, onSpinComplete }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [size, setSize] = useState(320);
   const [rotation, setRotation] = useState(0);
-  const [displayWord, setDisplayWord] = useState<string | null>(null);
   const animFrameRef = useRef<number>(0);
-  const spinStartRef = useRef<number | null>(null);
-  const targetRotRef = useRef<number>(0);
-  const spinDurationRef = useRef<number>(3000);
 
-  const available = words.filter(w => !calledWords.includes(w));
+  // Always-current refs — avoids stale closures in the animation callback
+  const wheelWordsRef = useRef<string[]>([]);
+  const onSpinCompleteRef = useRef(onSpinComplete);
+  onSpinCompleteRef.current = onSpinComplete;
+
+  // Fill container responsively
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const w = Math.floor(entries[0].contentRect.width);
+      if (w > 0) setSize(w);
+    });
+    ro.observe(el);
+    const w = Math.floor(el.getBoundingClientRect().width);
+    if (w > 0) setSize(w);
+    return () => ro.disconnect();
+  }, []);
+
+  // Keep currentWord on the wheel during spin even if calledWords was already
+  // updated to include it (belt-and-suspenders alongside the AdminView delay fix)
+  const available = words.filter(w => !calledWords.includes(w) || w === currentWord);
   const wheelWords = available.length > 0 ? available : words;
+  wheelWordsRef.current = wheelWords; // always fresh for animation callback
+
   const count = wheelWords.length;
   const sliceAngle = (2 * Math.PI) / Math.max(count, 1);
+  const s = size / 320;
 
-  // Draw wheel on canvas
+  // Draw
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || count === 0) return;
+    if (!canvas || count === 0 || size === 0) return;
     const ctx = canvas.getContext('2d')!;
-    const size = canvas.width;
     const cx = size / 2;
     const cy = size / 2;
-    const radius = size / 2 - 4;
+    const radius = size / 2 - 4 * s;
 
     ctx.clearRect(0, 0, size, size);
 
@@ -43,7 +64,6 @@ export default function BingoWheel({ words, calledWords, currentWord, isSpinning
       const start = rotation + i * sliceAngle - Math.PI / 2;
       const end = start + sliceAngle;
 
-      // Slice
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.arc(cx, cy, radius, start, end);
@@ -51,79 +71,88 @@ export default function BingoWheel({ words, calledWords, currentWord, isSpinning
       ctx.fillStyle = COLORS[i % COLORS.length];
       ctx.fill();
       ctx.strokeStyle = '#fdf6e3';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 * s;
       ctx.stroke();
 
-      // Label
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(start + sliceAngle / 2);
       ctx.textAlign = 'right';
       ctx.fillStyle = '#fff';
-      ctx.font = `bold ${Math.max(8, Math.min(13, 220 / count))}px sans-serif`;
-      ctx.shadowColor = 'rgba(0,0,0,0.4)';
+      ctx.font = `bold ${Math.max(8, Math.min(13 * s, (220 * s) / count))}px sans-serif`;
+      ctx.shadowColor = 'rgba(0,0,0,0.45)';
       ctx.shadowBlur = 3;
-      // Truncate long words
-      const maxLen = 14;
-      const label = word.length > maxLen ? word.slice(0, maxLen) + '…' : word;
-      ctx.fillText(label, radius - 10, 5);
+      const label = word.length > 14 ? word.slice(0, 14) + '…' : word;
+      ctx.fillText(label, radius - 10 * s, 5 * s);
       ctx.restore();
     });
 
-    // Center circle
+    // Center hub
     ctx.beginPath();
-    ctx.arc(cx, cy, 22, 0, 2 * Math.PI);
+    ctx.arc(cx, cy, 22 * s, 0, 2 * Math.PI);
     ctx.fillStyle = '#fdf6e3';
     ctx.fill();
     ctx.strokeStyle = '#1a6b3c';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 3 * s;
     ctx.stroke();
 
-    // Pointer (triangle at top)
-    const pSize = 18;
+    // Pointer triangle at top
+    const p = 18 * s;
     ctx.beginPath();
-    ctx.moveTo(cx - pSize / 2, 2);
-    ctx.lineTo(cx + pSize / 2, 2);
-    ctx.lineTo(cx, pSize + 6);
+    ctx.moveTo(cx - p / 2, 2 * s);
+    ctx.lineTo(cx + p / 2, 2 * s);
+    ctx.lineTo(cx, p + 6 * s);
     ctx.closePath();
     ctx.fillStyle = '#c9960c';
     ctx.fill();
-  }, [rotation, wheelWords, sliceAngle, count]);
+  }, [rotation, size]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Animate spin
+  // Spin animation
   useEffect(() => {
     if (!isSpinning || !currentWord) return;
 
-    const wordIdx = wheelWords.indexOf(currentWord);
-    const targetAngle = wordIdx >= 0
-      ? -(wordIdx * sliceAngle + sliceAngle / 2) // align word to top
-      : 0;
+    // Use the ref so we always read the freshest wheelWords,
+    // even if a render happened between effect setup and frame execution.
+    const ww = wheelWordsRef.current;
+    const n = ww.length;
+    const sa = (2 * Math.PI) / Math.max(n, 1);
+    const wordIdx = ww.indexOf(currentWord);
 
-    const extraSpins = (5 + Math.random() * 5) * 2 * Math.PI;
-    const normalizedCurrent = rotation % (2 * Math.PI);
-    targetRotRef.current = rotation + extraSpins + (targetAngle - normalizedCurrent + 4 * Math.PI) % (2 * Math.PI);
-    spinDurationRef.current = 3000 + Math.random() * 1000;
-    spinStartRef.current = null;
-
-    const startRot = rotation;
-
-    function easeOut(t: number): number {
-      return 1 - Math.pow(1 - t, 4);
+    if (wordIdx === -1) {
+      // Word not found — just complete without animating
+      onSpinCompleteRef.current?.();
+      return;
     }
 
-    function frame(ts: number) {
-      if (spinStartRef.current === null) spinStartRef.current = ts;
-      const elapsed = ts - spinStartRef.current;
-      const progress = Math.min(elapsed / spinDurationRef.current, 1);
-      const eased = easeOut(progress);
-      const newRot = startRot + (targetRotRef.current - startRot) * eased;
-      setRotation(newRot);
+    // Target rotation: slice `wordIdx` center sits at the pointer (top = -π/2)
+    // rotation_final ≡ -((wordIdx + 0.5) * sa)  (mod 2π)
+    const targetBase = -((wordIdx + 0.5) * sa);
+    const targetNorm = ((targetBase % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+    const currentNorm = ((rotation % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
 
+    // Forward delta to reach target (always in [0, 2π))
+    const delta = (targetNorm - currentNorm + 2 * Math.PI) % (2 * Math.PI);
+
+    // Extra full rotations for drama — MUST be integer multiples of 2π
+    // so the fractional part doesn't offset the landing position.
+    const extraSpins = (4 + Math.floor(Math.random() * 4)) * 2 * Math.PI;
+    const finalRotation = rotation + extraSpins + delta;
+    const duration = 3000 + Math.random() * 800;
+
+    let startTime: number | null = null;
+    const startRot = rotation;
+
+    function easeOut(t: number) { return 1 - Math.pow(1 - t, 4); }
+
+    function frame(ts: number) {
+      if (startTime === null) startTime = ts;
+      const progress = Math.min((ts - startTime) / duration, 1);
+      setRotation(startRot + (finalRotation - startRot) * easeOut(progress));
       if (progress < 1) {
         animFrameRef.current = requestAnimationFrame(frame);
       } else {
-        setDisplayWord(currentWord);
-        onSpinComplete?.();
+        // Use the ref so we get the latest callback (never stale)
+        onSpinCompleteRef.current?.();
       }
     }
 
@@ -131,38 +160,14 @@ export default function BingoWheel({ words, calledWords, currentWord, isSpinning
     return () => cancelAnimationFrame(animFrameRef.current);
   }, [isSpinning, currentWord]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (!isSpinning) setDisplayWord(currentWord);
-  }, [currentWord, isSpinning]);
-
   return (
-    <div className="flex flex-col items-center gap-4">
-      <div className="relative">
-        <canvas
-          ref={canvasRef}
-          width={320}
-          height={320}
-          className="rounded-full shadow-2xl border-4 border-raya-gold"
-        />
-      </div>
-
-      {/* Current word display */}
-      <div className="w-full max-w-xs">
-        <div className={`
-          text-center rounded-xl px-6 py-4 shadow-lg border-2 border-raya-gold min-h-[72px]
-          flex items-center justify-center
-          ${displayWord ? 'bg-raya-green text-white' : 'bg-white text-raya-dark/40'}
-        `}>
-          {displayWord
-            ? <span className="text-2xl font-bold">{displayWord}</span>
-            : <span className="text-lg">Spin the wheel!</span>
-          }
-        </div>
-      </div>
-
-      <div className="text-sm text-raya-dark/60">
-        {available.length} words remaining · {calledWords.length} called
-      </div>
+    <div ref={containerRef} className="w-full aspect-square">
+      <canvas
+        ref={canvasRef}
+        width={size}
+        height={size}
+        className="w-full h-full rounded-full shadow-2xl border-4 border-raya-gold"
+      />
     </div>
   );
 }
