@@ -17,6 +17,7 @@ export interface GameState {
   wordPool: string[];
   calledWords: string[];
   players: Map<string, BingoCard>;
+  activeSockets: Map<string, string>;
   bingoClaims: BingoClaim[];
   status: 'waiting' | 'active' | 'ended';
 }
@@ -24,6 +25,7 @@ export interface GameState {
 // Socket event payloads
 export interface JoinGamePayload {
   playerName: string;
+  playerId?: string;
 }
 
 export interface SpinWordPayload {

@@ -10,6 +10,7 @@ function createInitialState(eventSlug = 'hari-raya'): GameState {
     wordPool: pool.words,
     calledWords: [],
     players: new Map(),
+    activeSockets: new Map(),
     bingoClaims: [],
     status: 'waiting',
   };
@@ -29,9 +30,18 @@ export function resetGame(eventSlug?: string, eventName?: string): void {
   }
 }
 
-export function addPlayer(socketId: string, playerName: string): BingoCard {
-  const card = generateCard(playerName, state.wordPool);
-  state.players.set(socketId, card);
+export function addPlayer(socketId: string, playerName: string, existingPlayerId?: string): BingoCard {
+  let card: BingoCard;
+  
+  if (existingPlayerId && state.players.has(existingPlayerId)) {
+    card = state.players.get(existingPlayerId)!;
+  } else {
+    card = generateCard(playerName, state.wordPool);
+    state.players.set(card.id, card);
+  }
+  
+  state.activeSockets.set(socketId, card.id);
+
   if (state.status === 'waiting') {
     state.status = 'active';
   }
@@ -39,7 +49,7 @@ export function addPlayer(socketId: string, playerName: string): BingoCard {
 }
 
 export function removePlayer(socketId: string): void {
-  state.players.delete(socketId);
+  state.activeSockets.delete(socketId);
 }
 
 export function getRandomUncalledWord(): string | null {

@@ -23,11 +23,19 @@ export function registerHandlers(io: Server, socket: Socket, serverUrl: string):
   // Player joins and receives their unique card
   socket.on('join-game', (payload: JoinGamePayload) => {
     const name = (payload?.playerName ?? '').trim() || 'Player';
-    const card = addPlayer(socket.id, name);
+    const card = addPlayer(socket.id, name, payload?.playerId);
     socket.emit('card-assigned', card);
 
-    // Notify admin of updated player count
+    // If joining an active game, immediately flush current words to frontend to sync their marks
     const snap = getSnapshot();
+    if (snap.calledWords.length > 0) {
+      socket.emit('word-called', { 
+        word: snap.calledWords[snap.calledWords.length - 1], 
+        calledWords: snap.calledWords 
+      });
+    }
+
+    // Notify admin of updated player count
     io.to('admin').emit('state-update', { playerCount: snap.playerCount });
   });
 

@@ -16,9 +16,19 @@ export default function PlayerView() {
   useEffect(() => {
     socket.connect();
 
+    const savedId = localStorage.getItem('bingo-player-id');
+    const savedName = localStorage.getItem('bingo-player-name');
+    if (savedId && savedName) {
+      setPlayerName(savedName);
+      setPhase('waiting');
+      socket.emit('join-game', { playerName: savedName, playerId: savedId });
+    }
+
     socket.on('card-assigned', (data: BingoCardType) => {
       setCard(data);
       setPhase('playing');
+      localStorage.setItem('bingo-player-id', data.id);
+      localStorage.setItem('bingo-player-name', data.playerName);
     });
 
     socket.on('word-called', ({ word, calledWords: cw }: { word: string; calledWords: string[] }) => {
@@ -32,6 +42,8 @@ export default function PlayerView() {
       setLastCalled(null);
       setPhase('join');
       setBingoAnnouncement(null);
+      localStorage.removeItem('bingo-player-id');
+      localStorage.removeItem('bingo-player-name');
     });
 
     socket.on('bingo-announced', ({ playerName: name }: { playerName: string }) => {
