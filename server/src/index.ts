@@ -6,7 +6,9 @@ import path from 'path';
 import { registerHandlers } from './socketHandlers';
 
 const PORT = parseInt(process.env.PORT ?? '3001', 10);
-const SERVER_URL = process.env.SERVER_URL ?? `http://localhost:${PORT}`;
+const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
+const defaultUrl = railwayDomain ? `https://${railwayDomain}` : `http://localhost:${PORT}`;
+const SERVER_URL = process.env.SERVER_URL ?? defaultUrl;
 
 // In production client and server share the same origin, so allow all same-origin + dev client
 const allowedOrigins = process.env.NODE_ENV === 'production'
