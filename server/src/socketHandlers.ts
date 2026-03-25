@@ -42,7 +42,10 @@ export function registerHandlers(io: Server, socket: Socket, serverUrl: string):
   // Admin: request QR code
   socket.on('get-qr', async () => {
     try {
-      const playerUrl = serverUrl;
+      const host = socket.handshake.headers.host;
+      const protocol = socket.handshake.headers['x-forwarded-proto'] || (host?.includes('localhost') ? 'http' : 'https');
+      const playerUrl = host ? `${protocol}://${host}` : serverUrl;
+      
       const dataUrl = await QRCode.toDataURL(playerUrl, { width: 400 });
       socket.emit('qr-code', { dataUrl, url: playerUrl });
     } catch (err) {
