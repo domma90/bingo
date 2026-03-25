@@ -42,13 +42,18 @@ export function removePlayer(socketId: string): void {
   state.players.delete(socketId);
 }
 
-export function callNextWord(): string | null {
+export function getRandomUncalledWord(): string | null {
   const uncalled = state.wordPool.filter(w => !state.calledWords.includes(w));
   if (uncalled.length === 0) return null;
 
   const word = uncalled[Math.floor(Math.random() * uncalled.length)];
-  state.calledWords.push(word);
   return word;
+}
+
+export function callWord(word: string): void {
+  if (!state.calledWords.includes(word) && state.wordPool.includes(word)) {
+    state.calledWords.push(word);
+  }
 }
 
 export function recordBingoClaim(socketId: string, playerName: string): BingoClaim {

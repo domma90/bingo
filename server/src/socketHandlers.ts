@@ -3,7 +3,8 @@ import QRCode from 'qrcode';
 import {
   addPlayer,
   removePlayer,
-  callNextWord,
+  getRandomUncalledWord,
+  callWord,
   recordBingoClaim,
   resetGame,
   getSnapshot,
@@ -11,6 +12,7 @@ import {
 import {
   JoinGamePayload,
   SpinWordPayload,
+  SpinCompletePayload,
   ClaimBingoPayload,
   ResetGamePayload,
 } from './types';
@@ -40,19 +42,38 @@ export function registerHandlers(io: Server, socket: Socket, serverUrl: string):
     }
   });
 
-  // Admin: spin the wheel → call next word
+  // Admin: spin the wheel → get word but don't call it yet
   socket.on('spin-word', (payload: SpinWordPayload) => {
     if (payload?.adminSecret !== ADMIN_SECRET) {
       socket.emit('error', { message: 'Unauthorized' });
       return;
     }
-    const word = callNextWord();
+    const word = getRandomUncalledWord();
     if (!word) {
       socket.emit('error', { message: 'All words have been called!' });
       return;
     }
+    // Only notify admin(s) to start their local spin animations
+    io.to('admin').emit('spin-started', { word });
+  });
+
+  // Admin: wheel spin animation finished → officially call the word
+  socket.on('spin-complete', (payload: SpinCompletePayload) => {
+    if (payload?.adminSecret !== ADMIN_SECRET) {
+      socket.emit('error', { message: 'Unauthorized' });
+      return;
+    }
+    if (payload.word) {
+      const snapBefore = getSnapshot();
+      if (snapBefore.calledWords.includes(payload.word)) {
+        // already handled by another admin instance
+        return;
+      }
+      callWord(payload.word);
+    }
     const snap = getSnapshot();
-    io.emit('word-called', { word, calledWords: snap.calledWords });
+    io.emit('word-called', { word: payload.word, calledWords: snap.calledWords });
+    io.to('admin').emit('state-update', { playerCount: snap.playerCount });
   });
 
   // Player: claim bingo

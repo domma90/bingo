@@ -30,6 +30,11 @@ export interface SpinWordPayload {
   adminSecret: string;
 }
 
+export interface SpinCompletePayload {
+  adminSecret: string;
+  word: string;
+}
+
 export interface ClaimBingoPayload {
   playerName: string;
 }

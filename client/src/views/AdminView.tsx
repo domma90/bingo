@@ -25,10 +25,6 @@ export default function AdminView() {
   const [showReset, setShowReset] = useState(false);
   const [claimFlash, setClaimFlash] = useState(false);
 
-  // Holds the updated calledWords from the server until the spin animation
-  // completes — this keeps currentWord visible on the wheel during the spin.
-  const pendingCalledWordsRef = useRef<string[] | null>(null);
-
   useEffect(() => {
     if (!authenticated) return;
 
@@ -44,12 +40,14 @@ export default function AdminView() {
       setQrData(data);
     });
 
-    socket.on('word-called', ({ word, calledWords }: { word: string; calledWords: string[] }) => {
-      // Store calledWords but don't apply yet — the wheel needs currentWord
-      // to still be in the available pool so the animation lands correctly.
-      pendingCalledWordsRef.current = calledWords;
+    socket.on('spin-started', ({ word }: { word: string }) => {
       setCurrentWord(word);
       setIsSpinning(true);
+    });
+
+    socket.on('word-called', ({ word, calledWords }: { word: string; calledWords: string[] }) => {
+      setGameState(prev => prev ? { ...prev, calledWords } : null);
+      setDisplayWord(word);
     });
 
     socket.on('bingo-claimed', (claim: BingoClaim) => {
@@ -64,7 +62,6 @@ export default function AdminView() {
       setCurrentWord(null);
       setDisplayWord(null);
       setIsSpinning(false);
-      pendingCalledWordsRef.current = null;
     });
 
     socket.on('error', ({ message }: { message: string }) => {
@@ -74,6 +71,7 @@ export default function AdminView() {
     return () => {
       socket.off('state-update');
       socket.off('qr-code');
+      socket.off('spin-started');
       socket.off('word-called');
       socket.off('bingo-claimed');
       socket.off('game-reset');
@@ -99,12 +97,8 @@ export default function AdminView() {
 
   const handleSpinComplete = () => {
     setIsSpinning(false);
-    setDisplayWord(currentWord);
-    // Now safe to apply the calledWords update
-    if (pendingCalledWordsRef.current !== null) {
-      const cw = pendingCalledWordsRef.current;
-      pendingCalledWordsRef.current = null;
-      setGameState(prev => prev ? { ...prev, calledWords: cw } : null);
+    if (currentWord) {
+      socket.emit('spin-complete', { adminSecret: ADMIN_SECRET, word: currentWord });
     }
   };
 
