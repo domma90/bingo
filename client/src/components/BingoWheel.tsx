@@ -97,15 +97,19 @@ export default function BingoWheel({ words, calledWords, currentWord, isSpinning
     ctx.lineWidth = 3 * s;
     ctx.stroke();
 
-    // Pointer triangle at top
-    const p = 18 * s;
+    // Sleek golden rim-peg pointer
+    const pWidth = 14 * s;
+    const pHeight = 12 * s;
     ctx.beginPath();
-    ctx.moveTo(cx - p / 2, 2 * s);
-    ctx.lineTo(cx + p / 2, 2 * s);
-    ctx.lineTo(cx, p + 6 * s);
+    ctx.moveTo(cx - pWidth / 2, 0); // Start at very top edge
+    ctx.lineTo(cx + pWidth / 2, 0);
+    ctx.lineTo(cx, pHeight); // Point down just to the rim edge
     ctx.closePath();
-    ctx.fillStyle = '#ef4444'; // Bright red
+    ctx.fillStyle = '#c9960c'; // Match the raya-gold theme
     ctx.fill();
+    ctx.strokeStyle = '#fdf6e3'; // White/cream stroke to make it pop
+    ctx.lineWidth = 2 * s;
+    ctx.stroke();
   }, [rotation, size, words, calledWords, currentWord]);
 
   // Spin animation

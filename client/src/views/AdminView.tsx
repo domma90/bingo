@@ -270,18 +270,34 @@ export default function AdminView() {
               <p className="text-white/30 text-sm text-center py-6">No words called yet</p>
             ) : (
               <div className="flex flex-wrap gap-2.5">
-                {[...calledWords].reverse().map((w, i) => (
-                  <span
-                    key={i}
-                    className={`px-4 py-2 rounded-xl text-base font-bold shadow-sm transition-colors
-                      ${i === 0
-                        ? 'bg-raya-green text-white ring-2 ring-white/20'
-                        : 'bg-[#1a6b3c]/80 text-white/90 hover:bg-[#1a6b3c]'
+                {[...calledWords].reverse().map((w, reverseIdx) => {
+                  const originalCallIdx = calledWords.length - 1 - reverseIdx;
+                  // Reconstruct exactly what the wheel looked like when this word was spun
+                  const previousCalled = calledWords.slice(0, originalCallIdx);
+                  const available = wordPool.filter(poolWord => !previousCalled.includes(poolWord));
+                  const wheelWords = available.length > 0 ? available : wordPool;
+                  const wheelIdx = wheelWords.indexOf(w);
+                  
+                  const WHEEL_COLORS = [
+                    '#1a6b3c', '#c9960c', '#2d8a52', '#e8b422', '#0d3d22',
+                    '#f0c842', '#155e33', '#d4a017', '#1e7a42', '#b8860b',
+                  ];
+                  const bgColor = wheelIdx !== -1 ? WHEEL_COLORS[wheelIdx % WHEEL_COLORS.length] : '#1a6b3c';
+
+                  const isLatest = reverseIdx === 0;
+
+                  return (
+                    <span
+                      key={w}
+                      className={`px-6 py-3 rounded-2xl text-xl font-black shadow-md transition-colors ${
+                        isLatest ? 'text-white ring-4 ring-white/30 scale-105' : 'text-white/90 hover:brightness-110'
                       }`}
-                  >
-                    {w}
-                  </span>
-                ))}
+                      style={{ backgroundColor: bgColor }}
+                    >
+                      {w}
+                    </span>
+                  );
+                })}
               </div>
             )}
           </div>
