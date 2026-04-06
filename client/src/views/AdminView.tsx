@@ -197,9 +197,27 @@ export default function AdminView() {
       {/* ── Two-column body ── */}
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
 
-        {/* ── Left column: wheel ── */}
-        <div className="flex items-center justify-center p-6 lg:flex-1 border-b border-white/5 lg:border-b-0 lg:border-r lg:border-white/5 overflow-hidden">
-          <div className="w-full max-w-[80vh] aspect-square flex items-center justify-center">
+        {/* ── Left column: wheel & current word ── */}
+        <div className="flex flex-col items-center justify-center p-6 lg:flex-1 border-b border-white/5 lg:border-b-0 lg:border-r lg:border-white/5 overflow-hidden gap-6">
+          
+          {/* Current word banner */}
+          <div className={`
+            w-full max-w-lg rounded-2xl border-2 px-6 py-5 text-center transition-all duration-300 min-h-[90px] flex items-center justify-center
+            ${displayWord
+              ? 'bg-raya-green border-raya-gold shadow-[0_0_32px_rgba(201,150,12,0.25)]'
+              : 'bg-white/5 border-white/10'
+            }
+          `}>
+            {isSpinning ? (
+              <span className="text-white/40 text-lg animate-pulse">Spinning…</span>
+            ) : displayWord ? (
+              <span className="text-4xl font-black tracking-wide text-white">{displayWord}</span>
+            ) : (
+              <span className="text-white/30 text-lg">Spin the wheel!</span>
+            )}
+          </div>
+
+          <div className="w-full max-w-[75vh] aspect-square flex items-center justify-center shrink-0">
             <div className="w-full h-full">
               <BingoWheel
                 words={wordPool}
@@ -214,23 +232,6 @@ export default function AdminView() {
 
         {/* ── Right column: controls ── */}
         <div className="flex flex-col gap-4 p-5 lg:w-80 xl:w-96 overflow-y-auto shrink-0">
-
-          {/* Current word banner */}
-          <div className={`
-            rounded-2xl border-2 px-6 py-5 text-center transition-all duration-300 min-h-[90px] flex items-center justify-center
-            ${displayWord
-              ? 'bg-raya-green border-raya-gold shadow-[0_0_32px_rgba(201,150,12,0.25)]'
-              : 'bg-white/5 border-white/10'
-            }
-          `}>
-            {isSpinning ? (
-              <span className="text-white/40 text-lg animate-pulse">Spinning…</span>
-            ) : displayWord ? (
-              <span className="text-3xl font-black tracking-wide text-white">{displayWord}</span>
-            ) : (
-              <span className="text-white/30 text-lg">Spin the wheel!</span>
-            )}
-          </div>
 
           {/* Spin button */}
           <button
@@ -289,8 +290,8 @@ export default function AdminView() {
                   return (
                     <span
                       key={w}
-                      className={`px-6 py-3 rounded-2xl text-xl font-black shadow-md transition-colors ${
-                        isLatest ? 'text-white ring-4 ring-white/30 scale-105' : 'text-white/90 hover:brightness-110'
+                      className={`px-4 py-2 rounded-xl text-lg font-bold shadow-sm transition-colors ${
+                        isLatest ? 'text-white ring-2 ring-white/50' : 'text-white/80 hover:brightness-110'
                       }`}
                       style={{ backgroundColor: bgColor }}
                     >

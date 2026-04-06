@@ -79,12 +79,12 @@ export default function BingoWheel({ words, calledWords, currentWord, isSpinning
       ctx.rotate(start + sliceAngle / 2);
       ctx.textAlign = 'right';
       ctx.fillStyle = '#fff';
-      const fontSize = Math.max(10, Math.min(28 * s, (400 * s) / count));
+      const fontSize = Math.max(8, Math.min(22 * s, (320 * s) / count));
       ctx.font = `bold ${fontSize}px sans-serif`;
       ctx.shadowColor = 'rgba(0,0,0,0.6)';
       ctx.shadowBlur = 3;
-      const label = word.length > 14 ? word.slice(0, 14) + '…' : word;
-      ctx.fillText(label, radius - 10 * s, 5 * s);
+      const label = word.length > 18 ? word.slice(0, 18) + '…' : word;
+      ctx.fillText(label, radius - 3 * s, 4 * s);
       ctx.restore();
     });
 
@@ -97,13 +97,13 @@ export default function BingoWheel({ words, calledWords, currentWord, isSpinning
     ctx.lineWidth = 3 * s;
     ctx.stroke();
 
-    // Sleek golden rim-peg pointer
+    // Sleek golden rim-peg pointer (pulled further out)
     const pWidth = 14 * s;
-    const pHeight = 12 * s;
+    const pHeight = 5 * s;
     ctx.beginPath();
     ctx.moveTo(cx - pWidth / 2, 0); // Start at very top edge
     ctx.lineTo(cx + pWidth / 2, 0);
-    ctx.lineTo(cx, pHeight); // Point down just to the rim edge
+    ctx.lineTo(cx, pHeight); // Barely touches the slices
     ctx.closePath();
     ctx.fillStyle = '#c9960c'; // Match the raya-gold theme
     ctx.fill();
