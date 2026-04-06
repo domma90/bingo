@@ -1,12 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import socket from '../socket';
 import BingoWheel from '../components/BingoWheel';
-import QRDisplay from '../components/QRDisplay';
-import { BingoClaim, GameSnapshot } from '../types';
+import { GameSnapshot } from '../types';
 
 const ADMIN_SECRET = import.meta.env.VITE_ADMIN_SECRET ?? 'admin';
-
-type Panel = 'called' | 'qr' | 'claims';
 
 export default function AdminView() {
   const [authenticated, setAuthenticated] = useState(false);
@@ -14,16 +11,12 @@ export default function AdminView() {
   const [authError, setAuthError] = useState('');
 
   const [gameState, setGameState] = useState<GameSnapshot | null>(null);
-  const [qrData, setQrData] = useState<{ dataUrl: string; url: string } | null>(null);
-  const [claims, setClaims] = useState<BingoClaim[]>([]);
   const [currentWord, setCurrentWord] = useState<string | null>(null);
   const [displayWord, setDisplayWord] = useState<string | null>(null);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [panel, setPanel] = useState<Panel>('called');
   const [eventSlugInput, setEventSlugInput] = useState('hari-raya');
   const [eventNameInput, setEventNameInput] = useState('');
   const [showReset, setShowReset] = useState(false);
-  const [claimFlash, setClaimFlash] = useState(false);
 
   useEffect(() => {
     if (!authenticated) return;
@@ -36,10 +29,6 @@ export default function AdminView() {
       setGameState(prev => prev ? { ...prev, ...data } : (data as GameSnapshot));
     });
 
-    socket.on('qr-code', (data: { dataUrl: string; url: string }) => {
-      setQrData(data);
-    });
-
     socket.on('spin-started', ({ word }: { word: string }) => {
       setCurrentWord(word);
       setIsSpinning(true);
@@ -50,15 +39,8 @@ export default function AdminView() {
       setDisplayWord(word);
     });
 
-    socket.on('bingo-claimed', (claim: BingoClaim) => {
-      setClaims(prev => [claim, ...prev]);
-      setClaimFlash(true);
-      setTimeout(() => setClaimFlash(false), 1500);
-    });
-
     socket.on('game-reset', (data: GameSnapshot) => {
       setGameState(data);
-      setClaims([]);
       setCurrentWord(null);
       setDisplayWord(null);
       setIsSpinning(false);
@@ -70,10 +52,8 @@ export default function AdminView() {
 
     return () => {
       socket.off('state-update');
-      socket.off('qr-code');
       socket.off('spin-started');
       socket.off('word-called');
-      socket.off('bingo-claimed');
       socket.off('game-reset');
       socket.off('error');
       socket.disconnect();
@@ -167,13 +147,6 @@ export default function AdminView() {
             <p className="text-2xl font-black text-raya-gold leading-none">{gameState?.playerCount ?? 0}</p>
             <p className="text-white/40 text-[10px] uppercase tracking-wide">Players</p>
           </div>
-
-          {claims.length > 0 && (
-            <div className={`text-center transition-transform duration-200 ${claimFlash ? 'scale-125' : 'scale-100'}`}>
-              <p className="text-2xl font-black text-orange-400 leading-none">{claims.length}</p>
-              <p className="text-white/40 text-[10px] uppercase tracking-wide">Bingos</p>
-            </div>
-          )}
 
           <button
             onClick={() => setShowReset(v => !v)}
@@ -292,95 +265,26 @@ export default function AdminView() {
             </div>
           )}
 
-          {/* Panel tabs */}
-          <div className="flex rounded-xl overflow-hidden border border-white/10 text-xs font-semibold uppercase tracking-wide shrink-0">
-            {(['called', 'qr', 'claims'] as Panel[]).map(p => (
-              <button
-                key={p}
-                onClick={() => setPanel(p)}
-                className={`flex-1 py-2.5 transition-colors
-                  ${panel === p
-                    ? 'bg-raya-gold text-raya-dark'
-                    : 'bg-white/5 text-white/50 hover:bg-white/10 hover:text-white'
-                  }`}
-              >
-                {p === 'called'
-                  ? `Words (${calledWords.length})`
-                  : p === 'qr'
-                  ? '📱 QR'
-                  : `🏆 (${claims.length})`}
-              </button>
-            ))}
+          <div className="bg-[#111827] rounded-xl border border-white/10 p-4 flex-1 min-h-[120px]">
+            {calledWords.length === 0 ? (
+              <p className="text-white/30 text-sm text-center py-6">No words called yet</p>
+            ) : (
+              <div className="flex flex-wrap gap-2.5">
+                {[...calledWords].reverse().map((w, i) => (
+                  <span
+                    key={i}
+                    className={`px-4 py-2 rounded-xl text-base font-bold shadow-sm transition-colors
+                      ${i === 0
+                        ? 'bg-raya-green text-white ring-2 ring-white/20'
+                        : 'bg-[#1a6b3c]/80 text-white/90 hover:bg-[#1a6b3c]'
+                      }`}
+                  >
+                    {w}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
-
-          {/* Called words */}
-          {panel === 'called' && (
-            <div className="bg-[#111827] rounded-xl border border-white/10 p-3 flex-1 min-h-[120px]">
-              {calledWords.length === 0 ? (
-                <p className="text-white/30 text-sm text-center py-6">No words called yet</p>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {[...calledWords].reverse().map((w, i) => (
-                    <span
-                      key={i}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold
-                        ${i === 0
-                          ? 'bg-raya-gold text-raya-dark shadow-md'
-                          : 'bg-white/10 text-white/70'
-                        }`}
-                    >
-                      {w}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* QR code */}
-          {panel === 'qr' && (
-            <div className="bg-[#111827] rounded-xl border border-white/10 p-4 flex flex-col items-center gap-3 min-h-[120px]">
-              {qrData ? (
-                <>
-                  <QRDisplay dataUrl={qrData.dataUrl} url={qrData.url} />
-                  <p className="text-white/40 text-xs text-center">
-                    Show this so players can scan and join
-                  </p>
-                </>
-              ) : (
-                <div className="text-white/40 text-center py-6">
-                  <div className="text-3xl mb-2 animate-spin-slow">⏳</div>
-                  <p className="text-sm">Generating QR code…</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Bingo claims */}
-          {panel === 'claims' && (
-            <div className="bg-[#111827] rounded-xl border border-white/10 p-3 flex-1 min-h-[120px]">
-              {claims.length === 0 ? (
-                <p className="text-white/30 text-sm text-center py-6">No bingo claims yet</p>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  {claims.map((c, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-3 bg-raya-gold/10 border border-raya-gold/25 rounded-lg px-3 py-2.5"
-                    >
-                      <span className="text-xl leading-none">
-                        {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `#${i + 1}`}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-bold text-raya-gold text-sm truncate">{c.playerName}</p>
-                        <p className="text-white/40 text-xs">{new Date(c.timestamp).toLocaleTimeString()}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
 
         </div>
       </div>
