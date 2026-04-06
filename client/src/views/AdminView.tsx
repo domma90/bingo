@@ -231,7 +231,7 @@ export default function AdminView() {
         </div>
 
         {/* ── Right column: controls ── */}
-        <div className="flex flex-col gap-4 p-5 lg:w-80 xl:w-96 overflow-y-auto shrink-0">
+        <div className="flex flex-col gap-4 p-5 min-w-[320px] lg:w-96 xl:w-[32rem] overflow-y-auto shrink-0">
 
           {/* Spin button */}
           <button
