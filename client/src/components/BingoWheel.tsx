@@ -76,15 +76,27 @@ export default function BingoWheel({ words, calledWords, currentWord, isSpinning
 
       ctx.save();
       ctx.translate(cx, cy);
-      ctx.rotate(start + sliceAngle / 2);
-      ctx.textAlign = 'right';
-      ctx.fillStyle = '#fff';
-      const fontSize = Math.max(8, Math.min(22 * s, (320 * s) / count));
+      let fontSize = Math.max(8, Math.min(12 * s, (240 * s) / count));
       ctx.font = `bold ${fontSize}px sans-serif`;
+      
+      // Prevent long words from diving deep into the narrow center of the wedge
+      let label = word;
+      let textWidth = ctx.measureText(label).width;
+      const maxAllowedWidth = radius - 36 * s; // Keep a generous margin from the center hub
+      
+      if (textWidth > maxAllowedWidth) {
+        // If the text is too long horizontally, we scale the font OUT right here!
+        // This ensures the text shrinks down to fit the wheel's radius perfectly
+        fontSize = Math.max(8, fontSize * (maxAllowedWidth / textWidth));
+        ctx.font = `bold ${fontSize}px sans-serif`;
+      }
+
       ctx.shadowColor = 'rgba(0,0,0,0.6)';
       ctx.shadowBlur = 3;
-      const label = word.length > 18 ? word.slice(0, 18) + '…' : word;
-      ctx.fillText(label, radius - 3 * s, 4 * s);
+      ctx.textBaseline = 'middle';
+      
+      // We no longer need a hard limit on characters since we mathematically scale it above
+      ctx.fillText(label, radius - 4 * s, 0);
       ctx.restore();
     });
 
