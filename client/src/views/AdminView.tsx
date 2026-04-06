@@ -201,13 +201,27 @@ export default function AdminView() {
         <div className="flex flex-col items-center justify-center p-6 lg:flex-1 border-b border-white/5 lg:border-b-0 lg:border-r lg:border-white/5 overflow-hidden gap-6">
           
           {/* Current word banner */}
-          <div className={`
-            w-full max-w-lg rounded-2xl border-2 px-6 py-5 text-center transition-all duration-300 min-h-[90px] flex items-center justify-center
-            ${displayWord
-              ? 'bg-raya-green border-raya-gold shadow-[0_0_32px_rgba(201,150,12,0.25)]'
-              : 'bg-white/5 border-white/10'
-            }
-          `}>
+          <div 
+            className={`
+              w-full max-w-lg rounded-2xl border-2 px-6 py-5 text-center transition-all duration-300 min-h-[90px] flex items-center justify-center
+              ${displayWord
+                ? 'border-raya-gold shadow-[0_0_32px_rgba(201,150,12,0.25)]'
+                : 'bg-white/5 border-white/10'
+              }
+            `}
+            style={displayWord ? { backgroundColor: (() => {
+              const WHEEL_COLORS = [
+                '#1a6b3c', '#c9960c', '#2d8a52', '#e8b422', '#0d3d22',
+                '#f0c842', '#155e33', '#d4a017', '#1e7a42', '#b8860b',
+              ];
+              const originalCallIdx = calledWords.indexOf(displayWord);
+              const prevCalled = originalCallIdx !== -1 ? calledWords.slice(0, originalCallIdx) : calledWords;
+              const avail = wordPool.filter(w => !prevCalled.includes(w));
+              const ww = avail.length > 0 ? avail : wordPool;
+              const wIdx = ww.indexOf(displayWord);
+              return wIdx !== -1 ? WHEEL_COLORS[wIdx % WHEEL_COLORS.length] : '#1a6b3c';
+            })() } : undefined}
+          >
             {isSpinning ? (
               <span className="text-white/40 text-lg animate-pulse">Spinning…</span>
             ) : displayWord ? (
