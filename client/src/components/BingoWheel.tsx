@@ -79,8 +79,9 @@ export default function BingoWheel({ words, calledWords, currentWord, isSpinning
       ctx.rotate(start + sliceAngle / 2);
       ctx.textAlign = 'right';
       ctx.fillStyle = '#fff';
-      ctx.font = `bold ${Math.max(8, Math.min(13 * s, (220 * s) / count))}px sans-serif`;
-      ctx.shadowColor = 'rgba(0,0,0,0.45)';
+      const fontSize = Math.max(10, Math.min(28 * s, (400 * s) / count));
+      ctx.font = `bold ${fontSize}px sans-serif`;
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
       ctx.shadowBlur = 3;
       const label = word.length > 14 ? word.slice(0, 14) + '…' : word;
       ctx.fillText(label, radius - 10 * s, 5 * s);
@@ -103,9 +104,9 @@ export default function BingoWheel({ words, calledWords, currentWord, isSpinning
     ctx.lineTo(cx + p / 2, 2 * s);
     ctx.lineTo(cx, p + 6 * s);
     ctx.closePath();
-    ctx.fillStyle = '#c9960c';
+    ctx.fillStyle = '#ef4444'; // Bright red
     ctx.fill();
-  }, [rotation, size]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [rotation, size, words, calledWords, currentWord]);
 
   // Spin animation
   useEffect(() => {

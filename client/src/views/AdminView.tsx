@@ -225,15 +225,17 @@ export default function AdminView() {
       <div className="flex-1 flex flex-col lg:flex-row min-h-0">
 
         {/* ── Left column: wheel ── */}
-        <div className="flex items-center justify-center p-6 lg:flex-1 border-b border-white/5 lg:border-b-0 lg:border-r lg:border-white/5">
-          <div className="w-full max-w-[520px]">
-            <BingoWheel
-              words={wordPool}
-              calledWords={calledWords}
-              currentWord={currentWord}
-              isSpinning={isSpinning}
-              onSpinComplete={handleSpinComplete}
-            />
+        <div className="flex items-center justify-center p-6 lg:flex-1 border-b border-white/5 lg:border-b-0 lg:border-r lg:border-white/5 overflow-hidden">
+          <div className="w-full max-w-[80vh] aspect-square flex items-center justify-center">
+            <div className="w-full h-full">
+              <BingoWheel
+                words={wordPool}
+                calledWords={calledWords}
+                currentWord={currentWord}
+                isSpinning={isSpinning}
+                onSpinComplete={handleSpinComplete}
+              />
+            </div>
           </div>
         </div>
 
