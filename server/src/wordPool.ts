@@ -42,7 +42,7 @@ export const wordPools: Record<string, EventWordPool> = {
       "Selendang",
       "Masjid",
       "Bulan Sabit",
-      "Lampu Lip Lap",
+      "Lampu Lap Lip",
       "Sirap Bandung",
       "Ketupat Palas",
       "Kuih Semperit",
